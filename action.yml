@@ -1,0 +1,67 @@
+name: "Build, Push and Deploy Action"
+description: "This action builds a docker image, pushes to IBM Cloud Registry"
+inputs:
+  github-sha:
+    description: "GitHub SHA value"
+    required: true
+  cloud-api-key:
+    description: "IBM Cloud API Key"
+    required: true
+  cloud-resource-group:
+    description: "Cloud Resource Group"
+    required: false
+    default: "default"
+  cloud-region:
+    description: "IBM Cloud Region"
+    required: false
+    default: "us-south"
+  icr-region:
+    description: "Container Registry Region"
+    required: false
+    default: "us-south"
+  icr-namespace:
+    description: "IBM Cloud Container Registry namespace"
+    required: true
+  registry-hostname:
+    description: "IBM Cloud Registry hostname"
+    required: false
+    default: "us.icr.io"
+  image-name:
+    description: "Docker image name"
+    required: true
+  deployment-name:
+    description: "Deployment name on Kubernetes"
+    required: true
+  container-name:
+    description: "Name of the container to set image for"
+    required: true
+  working-directory:
+    description: "Working directory that contains a Dockerfile"
+    required: false
+    default: "."
+runs:
+  using: "composite"
+  steps:
+    - id: ibmcloud-cli
+      run: |
+        curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+        ibmcloud --version
+        ibmcloud config --check-version=false
+        ibmcloud plugin install -f container-registry
+      shell: bash
+
+    - id: login-to-ibmcloud-cli
+      run: |
+        ibmcloud login --apikey "${{ inputs.cloud-api-key }}" -r "${{ inputs.cloud-region }}" -g "${{ inputs.cloud-resource-group }}"
+        ibmcloud cr region-set "${{ inputs.icr-region }}"
+        ibmcloud cr login
+      shell: bash
+
+    - id: build-with-docker
+      run: docker build --tag "${{ inputs.registry-hostname }}"/"${{ inputs.icr-namespace }}"/"${{ inputs.image-name }}":"${{ inputs.github-sha }}" "."
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+
+    - id: push-to-icr
+      run: docker push "${{ inputs.registry-hostname }}"/"${{ inputs.icr-namespace }}"/"${{ inputs.image-name }}":"${{ inputs.github-sha }}"
+      shell: bash
